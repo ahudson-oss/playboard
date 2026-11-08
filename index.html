@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; media-src blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="description" content="Free basketball play builder. Draw plays, animate them, and export GIFs or videos. Plays stay on your device.">
+<title>Playboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Archivo:wght@400;500;600&display=swap">
+<style>
+html{color-scheme:light}
+body{margin:0}
+[hidden]{display:none!important}
+/* Layout: coach's dry-erase board — court as the hero on the left, step strip under it, play library on the right; stacks on phones. */
+:root{
+  --bg:#eceff3; --panel:#ffffff; --ink:#16202b; --muted:#5b6674; --line:#cdd4dc;
+  --court:#fbfcfd; --courtline:#27313d; --paint:#e9eef4; --apron:#dde3ea;
+  --off:#1d4fd6; --on-off:#ffffff; --def:#c81e2a; --ball:#e8740c;
+  --focus:#1d4fd6;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1319; --panel:#161d25; --ink:#e5eaf0; --muted:#97a3b1; --line:#2b3541;
+  --court:#19212a; --courtline:#c4cdd7; --paint:#202a35; --apron:#10161d;
+  --off:#7aa5ff; --on-off:#0b1220; --def:#ff6e74; --ball:#ff9a3c; --focus:#7aa5ff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1319; --panel:#161d25; --ink:#e5eaf0; --muted:#97a3b1; --line:#2b3541;
+  --court:#19212a; --courtline:#c4cdd7; --paint:#202a35; --apron:#10161d;
+  --off:#7aa5ff; --on-off:#0b1220; --def:#ff6e74; --ball:#ff9a3c; --focus:#7aa5ff; color-scheme:dark}
+
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:700;font-size:2.4rem;letter-spacing:.02em;margin:0;line-height:1}
+h1 span{color:var(--off)}
+.tag{color:var(--muted);margin:0}
+h2{font-family:var(--display);font-weight:600;font-size:1.05rem;letter-spacing:.08em;text-transform:uppercase;margin:0;color:var(--muted)}
+
+.app{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+@media (max-width:880px){.app{grid-template-columns:minmax(0,1fr)}}
+
+.board{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.board:fullscreen{border-radius:0;justify-content:center;padding:24px}
+.board:fullscreen svg{max-height:78vh}
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.spacer{flex:1}
+button,select,input[type=text],textarea{font:inherit;color:inherit}
+button{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 12px;cursor:pointer;font-weight:500;line-height:1.2}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--off);color:var(--on-off);border-color:var(--off);font-weight:600}
+button.danger{color:var(--def)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+select,input[type=text],textarea{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+textarea{resize:vertical;min-height:60px}
+label.chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.92rem;cursor:pointer}
+.speed{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.92rem}
+.speed select{width:auto;padding:5px 6px}
+
+.courtwrap{display:flex;justify-content:center}
+svg#court{width:100%;max-width:640px;height:auto;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
+.c-floor{fill:var(--court)}
+.c-apron{fill:var(--apron)}
+.ob-t{fill:var(--muted);font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.2em}
+.full svg#court{max-height:82vh}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 11px}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.c-paint{fill:var(--paint)}
+.c-line{fill:none;stroke:var(--courtline);stroke-width:2.4}
+.c-rim{fill:none;stroke:var(--ball);stroke-width:2.4}
+.tok{cursor:grab}
+.tok:active{cursor:grabbing}
+.playing .tok{cursor:default}
+.off-c{fill:var(--off)}
+.off-t{fill:var(--on-off);font-family:var(--display);font-weight:700;font-size:20px}
+.def-c{fill:var(--court);stroke:var(--def);stroke-width:3}
+.def-t{fill:var(--def);font-family:var(--display);font-weight:700;font-size:17px}
+.ball-c{fill:var(--ball);stroke:var(--courtline);stroke-width:1.2}
+.ghost{opacity:.22}
+.ar-off{stroke:var(--off);stroke-width:3;fill:none}
+.ar-def{stroke:var(--def);stroke-width:2.2;fill:none;opacity:.7}
+.ar-ball{stroke:var(--ball);stroke-width:2.6;fill:none;stroke-dasharray:7 6}
+.mk-off{fill:var(--off)} .mk-def{fill:var(--def)} .mk-ball{fill:var(--ball)}
+
+.steps{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.step{font-family:var(--display);font-weight:600;font-size:1.05rem;letter-spacing:.03em;min-width:44px;font-variant-numeric:tabular-nums}
+.step.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.notewrap{display:flex;flex-direction:column;gap:4px}
+.notewrap label{font-size:.85rem;color:var(--muted)}
+.cue{font-family:var(--display);font-size:1.5rem;font-weight:600;text-align:center;min-height:1.6em;margin:0}
+.board:not(:fullscreen) .cue{display:none}
+.board:fullscreen .notewrap,.board:fullscreen .stepedit{display:none}
+
+.lib{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.lib li{display:flex;gap:6px;align-items:center}
+.lib .name{flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib .name.on{border-color:var(--off);color:var(--off)}
+.muted{color:var(--muted);font-size:.88rem;margin:0}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row > *{flex:1}
+ol.how{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;font-size:.92rem}
+.bar{height:6px;border-radius:3px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+.bar span{display:block;height:100%;width:0;background:var(--off)}
+#expCanvas{position:fixed;left:-10000px;top:0;pointer-events:none}
+.toast{min-height:1.2em;font-size:.88rem;color:var(--off);margin:0}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Play<span>board</span></h1>
+    <p class="tag">Drag players, add a step, hit play.</p>
+  </header>
+
+  <div class="app">
+    <section class="board" id="board">
+      <div class="toolbar">
+        <button class="primary" id="btnPlay">▶ Play</button>
+        <button id="btnPrev" aria-label="Previous step">◀ Step</button>
+        <button id="btnNext" aria-label="Next step">Step ▶</button>
+        <span class="speed"><label for="speed">Speed</label>
+          <select id="speed"><option value="0.5">Slow</option><option value="1" selected>Normal</option><option value="1.6">Fast</option></select></span>
+        <span class="spacer"></span>
+        <span class="seg" role="group" aria-label="How players move"><button id="mStraight" aria-pressed="true">Straight</button><button id="mCurve" aria-pressed="false">Curved</button></span>
+        <span class="seg" role="group" aria-label="Court"><button id="cHalf" aria-pressed="true">Half court</button><button id="cFull" aria-pressed="false">Full court</button></span>
+        <label class="chk"><input type="checkbox" id="showDef" checked> Defense</label>
+        <button id="btnFull">Full screen</button>
+      </div>
+
+      <p class="cue" id="cue"></p>
+      <div class="courtwrap">
+        <svg id="court" viewBox="-70 -70 640 590" aria-label="Half court play diagram">
+          <defs>
+            <marker id="m-off" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="mk-off" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="m-def" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="mk-def" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="m-ball" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="mk-ball" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <g id="courtLines"></g>
+          <g id="ghosts"></g>
+          <g id="arrows"></g>
+          <g id="tokens"></g>
+        </svg>
+      </div>
+
+      <div class="steps" id="steps"></div>
+      <div class="row stepedit">
+        <button id="btnAdd">+ Add step</button>
+        <button id="btnDel" class="danger">Delete step</button>
+      </div>
+      <div class="notewrap">
+        <label for="note">Coaching cue for this step</label>
+        <textarea id="note" rows="2" placeholder="e.g. 5 sets the ball screen on 1's right hip"></textarea>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card">
+        <h2>This play</h2>
+        <input type="text" id="playName" aria-label="Play name" placeholder="Play name">
+        <div class="row">
+          <button class="primary" id="btnSave">Save</button>
+          <button id="btnNew">New play</button>
+        </div>
+        <p class="toast" id="toast" aria-live="polite"></p>
+      </div>
+
+      <div class="card">
+        <h2>Playbook</h2>
+        <ul class="lib" id="lib"></ul>
+        <div class="row">
+          <button id="btnBackup">Back up playbook</button>
+          <button id="btnRestore">Restore backup</button>
+        </div>
+        <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+        <p class="muted">Your plays are saved only in this browser. Nothing is uploaded or shared unless you copy a play code or a backup file yourself. Back up now and then so clearing your browser doesn't wipe your playbook.</p>
+      </div>
+
+      <div class="card">
+        <h2>Save as GIF or video</h2>
+        <div class="row">
+          <button id="btnGif" disabled>Save GIF</button>
+          <button id="btnVid" disabled>Save video</button>
+        </div>
+        <div class="bar" id="bar" hidden><span id="barFill"></span></div>
+        <p class="muted" id="expMsg">Checking whether this view can save files…</p>
+      </div>
+
+      <div class="card">
+        <h2>Share a play</h2>
+        <button id="btnCopy">Copy play code</button>
+        <textarea id="code" rows="3" aria-label="Play code" placeholder="Paste a play code here"></textarea>
+        <button id="btnLoadCode">Load pasted code</button>
+      </div>
+
+      <div class="card">
+        <h2>How it works</h2>
+        <ol class="how">
+          <li>Drag players into the starting set.</li>
+          <li>Hit <b>+ Add step</b>, then move players to where they go next.</li>
+          <li>For curls, flares, and loops, switch to <b>Curved</b> and drag the player along the route you want (or hold Shift while dragging). Dragging in <b>Straight</b> mode turns a route back into a straight line.</li>
+          <li>Drop the ball on a player to give it to them. Passes show as dashed lines.</li>
+          <li>Press <b>Play</b> to watch it run. Full screen for film or the projector.</li>
+        </ol>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+const NS = "http://www.w3.org/2000/svg";
+const OFF = ["O1","O2","O3","O4","O5"], DEF = ["X1","X2","X3","X4","X5"], IDS = [...OFF, ...DEF];
+const R = 1.7, BR = 0.9; // token radius, ball radius (ft)
+const $ = id => document.getElementById(id);
+const svg = $("court");
+const U = v => v * 10;                 // ft -> svg units
+const X = x => (x + 25) * 10;          // court x (-25..25) -> svg
+
+const DEFAULT_POS = {
+  O1:[0,30], O2:[-17,22], O3:[17,22], O4:[-20,4], O5:[20,4],
+  X1:[0,26.5], X2:[-14,19], X3:[14,19], X4:[-16,6], X5:[16,6]
+};
+const clone = o => JSON.parse(JSON.stringify(o));
+const blankPlay = (name, court) => ({ name, court: court || "half", frames:[{ pos:clone(DEFAULT_POS), ball:{owner:"O1",x:0,y:30}, note:"", paths:{} }] });
+
+const SAMPLE = { name:"Horns PnR (example)", court:"half", frames:[
+  { pos:{O1:[0,31],O2:[-21,3],O3:[21,3],O4:[-6,19],O5:[6,19],X1:[0,27.5],X2:[-18,5],X3:[18,5],X4:[-5,16.5],X5:[5,16.5]},
+    ball:{owner:"O1",x:0,y:31}, note:"Horns set. 4 and 5 at the elbows, 2 and 3 in the corners." },
+  { pos:{O1:[0,31],O2:[-21,3],O3:[21,3],O4:[-6,19],O5:[2.5,29],X1:[0,27.5],X2:[-18,5],X3:[18,5],X4:[-5,16.5],X5:[3.5,25.5]},
+    ball:{owner:"O1",x:0,y:31}, note:"5 sets the ball screen on 1's right hip." },
+  { pos:{O1:[9,22],O2:[-21,3],O3:[21,3],O4:[-9,25],O5:[2,13],X1:[5.5,25],X2:[-16,6],X3:[17,6],X4:[-6,19],X5:[6.5,20]},
+    ball:{owner:"O1",x:9,y:22}, note:"1 attacks downhill. 5 rolls hard to the rim. 4 pops for spacing." },
+  { pos:{O1:[10,20],O2:[-21,3],O3:[21,3],O4:[-9,25],O5:[1,8],X1:[8,22],X2:[-15,6],X3:[12,8],X4:[-6,19],X5:[7,18]},
+    ball:{owner:"O5",x:1,y:8}, note:"Hit 5 on the roll. If X3 helps, kick to 3 in the corner." }
+]};
+
+/* ---------- storage (per-browser, optional) ---------- */
+const store = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
+};
+
+function normalize(p){
+  if (!p || !Array.isArray(p.frames) || !p.frames.length) throw new Error("bad");
+  const okPt = a => Array.isArray(a) && a.length === 2 && a.every(n => typeof n === "number" && isFinite(n));
+  return {
+    name: String(p.name || "Untitled play").slice(0, 60),
+    court: p.court === "full" ? "full" : "half",
+    frames: p.frames.slice(0, 40).map(f => {
+      const pos = {};
+      IDS.forEach(id => pos[id] = okPt(f?.pos?.[id]) ? f.pos[id].slice() : DEFAULT_POS[id].slice());
+      const b = f?.ball || {};
+      const owner = IDS.includes(b.owner) ? b.owner : null;
+      const paths = {};
+      Object.entries(f?.paths || {}).forEach(([id, v]) => {
+        if (IDS.includes(id) && Array.isArray(v) && v.length >= 2 && v.length <= 200 && v.every(okPt)) paths[id] = v.map(q => q.slice());
+      });
+      return { pos, ball:{ owner, x: +b.x || 0, y: +b.y || 30 }, note: String(f?.note || "").slice(0, 300), paths };
+    })
+  };
+}
+
+const S = {
+  play: (() => { try { return normalize(store.get("playboard.draft")); } catch { return normalize(clone(SAMPLE)); } })(),
+  cur: 0, playing: false, showDef: true, drag: null, raf: 0, mode: "straight"
+};
+let library = store.get("playboard.library") || {};
+if (typeof library !== "object" || Array.isArray(library)) library = {};
+if (!Object.keys(library).length) library[SAMPLE.name] = clone(SAMPLE);
+
+const frame = () => S.play.frames[S.cur];
+const draft = () => store.set("playboard.draft", S.play);
+function toast(msg){ $("toast").textContent = msg; clearTimeout(toast.t); toast.t = setTimeout(() => $("toast").textContent = "", 2600); }
+
+/* ---------- court (NFHS: 50x47 half court, 12' lane, 19'9" arc) ---------- */
+function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; }
+// Out-of-bounds apron (ft) so inbounders and sideline sets fit
+const M = 7;
+function geo(){
+  const full = S.play.court === "full";
+  return { full, x0: -25 - M, x1: 25 + M, y0: -M, y1: full ? 94 + M : 47 + 5 };
+}
+function halfShapes(g){
+  el("rect",{x:X(-6),y:0,width:120,height:190,class:"c-paint"},g);
+  el("rect",{x:X(-6),y:0,width:120,height:190,class:"c-line"},g);            // 12' lane
+  el("path",{d:`M${X(-6)},190 A60,60 0 0 0 ${X(6)},190`,class:"c-line"},g);  // FT circle
+  el("path",{d:`M${X(-6)},190 A60,60 0 0 1 ${X(6)},190`,class:"c-line","stroke-dasharray":"8 8"},g);
+  const hy = 52.5, ar = 197.5;                                              // hoop 5.25', arc 19'9"
+  el("path",{d:`M${X(-19.75)},0 L${X(-19.75)},${hy} A${ar},${ar} 0 0 0 ${X(19.75)},${hy} L${X(19.75)},0`,class:"c-line"},g);
+  el("line",{x1:X(-3),y1:40,x2:X(3),y2:40,class:"c-line","stroke-width":4},g);
+  el("circle",{cx:X(0),cy:hy,r:7.5,class:"c-rim"},g);
+  [70,80,110,140].forEach(y => { el("line",{x1:X(-6)-6,y1:y,x2:X(-6),y2:y,class:"c-line"},g); el("line",{x1:X(6),y1:y,x2:X(6)+6,y2:y,class:"c-line"},g); });
+}
+let drawnCourt = null;
+function drawCourt(){
+  const gm = geo();
+  if (drawnCourt === S.play.court) return;
+  drawnCourt = S.play.court;
+  svg.setAttribute("viewBox", `${X(gm.x0)} ${U(gm.y0)} ${U(gm.x1-gm.x0)} ${U(gm.y1-gm.y0)}`);
+  $("board").classList.toggle("full", gm.full);
+  $("cHalf").setAttribute("aria-pressed", String(!gm.full));
+  $("cFull").setAttribute("aria-pressed", String(gm.full));
+  const g = $("courtLines"); g.textContent = "";
+  const len = gm.full ? 940 : 470;
+  el("rect",{x:X(gm.x0),y:U(gm.y0),width:U(gm.x1-gm.x0),height:U(gm.y1-gm.y0),class:"c-apron"},g);
+  el("rect",{x:0,y:0,width:500,height:len,class:"c-floor"},g);
+  halfShapes(g);
+  if (gm.full){
+    halfShapes(el("g",{transform:"translate(0 940) scale(1 -1)"},g));
+    el("line",{x1:0,y1:470,x2:500,y2:470,class:"c-line"},g);
+    el("circle",{cx:250,cy:470,r:60,class:"c-line"},g);
+  } else {
+    el("path",{d:`M${X(-6)},470 A60,60 0 0 1 ${X(6)},470`,class:"c-line"},g);
+  }
+  el("rect",{x:0,y:0,width:500,height:len,class:"c-line"},g);
+  // small OB labels so inbound spots read clearly
+  const lab = (x, y, t, rot) => { const e = el("text",{x, y, "text-anchor":"middle", class:"ob-t", transform: rot ? `rotate(${rot} ${x} ${y})` : ""}, g); e.textContent = t; };
+  lab(250, -30, "BASELINE");
+  lab(-38, len/2, "SIDELINE", -90); lab(538, len/2, "SIDELINE", 90);
+  if (gm.full) lab(250, 970, "BASELINE");
+}
+
+/* ---------- state helpers ---------- */
+function ballPt(f, pos){
+  pos = pos || f.pos;
+  return f.ball.owner ? [pos[f.ball.owner][0] + 1.5, pos[f.ball.owner][1] - 1.5] : [f.ball.x, f.ball.y];
+}
+const lerp = (a,b,t) => a + (b - a) * t;
+const ease = t => t < .5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2;
+const stateOf = f => ({ pos: f.pos, ball: ballPt(f) });
+/* ---------- curved routes ---------- */
+// A frame's route for a player = where they stood last step, then the points drawn this step
+const routeOf = (a, b, id) => b.paths && b.paths[id] ? [a.pos[id], ...b.paths[id]] : null;
+function pathLen(pts){ let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]); return L; }
+function pointAlong(pts, k){
+  const total = pathLen(pts); if (total === 0) return pts[pts.length-1].slice();
+  let want = k * total;
+  for (let i = 1; i < pts.length; i++){
+    const seg = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    if (want <= seg && seg > 0){ const t = want / seg; return [lerp(pts[i-1][0], pts[i][0], t), lerp(pts[i-1][1], pts[i][1], t)]; }
+    want -= seg;
+  }
+  return pts[pts.length-1].slice();
+}
+// Cut a distance off each end so the line starts and stops at the edge of the player circle
+function trimPath(pts, d0, d1){
+  const L = pathLen(pts); if (L <= d0 + d1 + 0.3) return null;
+  const out = [pointAlong(pts, d0 / L)];
+  let acc = 0;
+  for (let i = 1; i < pts.length - 1; i++){
+    acc += Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    if (acc > d0 && acc < L - d1) out.push(pts[i]);
+  }
+  out.push(pointAlong(pts, (L - d1) / L));
+  return out;
+}
+// Smooth curve through the sampled points (quadratic through midpoints)
+function smoothD(pts){
+  const P = q => `${X(q[0]).toFixed(1)},${U(q[1]).toFixed(1)}`;
+  if (pts.length < 3) return `M${P(pts[0])} L${P(pts[pts.length-1])}`;
+  let d = `M${P(pts[0])}`;
+  for (let i = 1; i < pts.length - 1; i++){ const m = [(pts[i][0]+pts[i+1][0])/2, (pts[i][1]+pts[i+1][1])/2]; d += ` Q${P(pts[i])} ${P(m)}`; }
+  return d + ` L${P(pts[pts.length-1])}`;
+}
+
+function interpState(a, b, k){
+  const pos = {};
+  IDS.forEach(id => {
+    const r = routeOf(a, b, id);
+    pos[id] = r ? pointAlong(r, k) : [lerp(a.pos[id][0], b.pos[id][0], k), lerp(a.pos[id][1], b.pos[id][1], k)];
+  });
+  // ball rides with its owner, or travels straight on a pass
+  let ball;
+  if (a.ball.owner && a.ball.owner === b.ball.owner) ball = [pos[a.ball.owner][0] + 1.5, pos[a.ball.owner][1] - 1.5];
+  else { const a0 = ballPt(a), b0 = ballPt(b); ball = [lerp(a0[0], b0[0], k), lerp(a0[1], b0[1], k)]; }
+  return { pos, ball };
+}
+
+/* ---------- render ---------- */
+function render(state, withArrows){
+  const tok = $("tokens"), ar = $("arrows"), gh = $("ghosts");
+  tok.textContent = ""; ar.textContent = ""; gh.textContent = "";
+  const visible = id => S.showDef || id[0] === "O";
+
+  if (withArrows && S.cur > 0){
+    const prev = S.play.frames[S.cur - 1], f = frame();
+    IDS.filter(visible).forEach(id => {
+      const def = id[0] === "X", route = routeOf(prev, f, id);
+      if (route){
+        const t = trimPath(route, R, R + .3); if (!t) return;
+        drawToken(gh, id, route[0]);
+        el("path",{d: smoothD(t), class: def ? "ar-def" : "ar-off", "stroke-linecap":"round", "stroke-linejoin":"round", "marker-end": def ? "url(#m-def)" : "url(#m-off)"}, ar);
+        return;
+      }
+      const a = prev.pos[id], b = f.pos[id], dx = b[0]-a[0], dy = b[1]-a[1], d = Math.hypot(dx, dy);
+      if (d < 1.2) return;
+      const ux = dx/d, uy = dy/d;
+      drawToken(gh, id, a);
+      el("line",{x1:X(a[0]+ux*R), y1:U(a[1]+uy*R), x2:X(b[0]-ux*(R+.3)), y2:U(b[1]-uy*(R+.3)),
+        class: def ? "ar-def" : "ar-off", "marker-end": def ? "url(#m-def)" : "url(#m-off)"}, ar);
+    });
+    if (prev.ball.owner !== f.ball.owner){
+      const a = ballPt(prev, f.pos), b = ballPt(f);
+      const dx = b[0]-a[0], dy = b[1]-a[1], d = Math.hypot(dx, dy);
+      if (d > 2) el("line",{x1:X(a[0]), y1:U(a[1]), x2:X(b[0]-dx/d*BR*1.4), y2:U(b[1]-dy/d*BR*1.4), class:"ar-ball", "marker-end":"url(#m-ball)"}, ar);
+    }
+  }
+  [...DEF, ...OFF].filter(visible).forEach(id => drawToken(tok, id, state.pos[id], true));
+  const g = el("g",{class:"tok","data-id":"BALL"},tok);
+  el("circle",{cx:X(state.ball[0]), cy:U(state.ball[1]), r:U(BR), class:"ball-c"},g);
+  el("circle",{cx:X(state.ball[0]), cy:U(state.ball[1]), r:U(BR)+10, fill:"transparent"},g); // bigger touch target
+}
+function drawToken(parent, id, p, live){
+  const g = el("g", live ? {class:"tok","data-id":id} : {class:"ghost"}, parent);
+  const def = id[0] === "X";
+  el("circle",{cx:X(p[0]), cy:U(p[1]), r:U(R), class: def ? "def-c" : "off-c"}, g);
+  const t = el("text",{x:X(p[0]), y:U(p[1])+1, "text-anchor":"middle", "dominant-baseline":"central", class: def ? "def-t" : "off-t"}, g);
+  t.textContent = def ? "X" + id[1] : id[1];
+}
+function renderFrame(){
+  const f = frame();
+  render({ pos:f.pos, ball:ballPt(f) }, true);
+}
+function renderSteps(){
+  const box = $("steps"); box.textContent = "";
+  S.play.frames.forEach((_, i) => {
+    const b = document.createElement("button");
+    b.className = "step" + (i === S.cur ? " on" : "");
+    b.textContent = i + 1; b.setAttribute("aria-label", "Step " + (i+1));
+    b.onclick = () => { if (!S.playing){ S.cur = i; refresh(); } };
+    box.appendChild(b);
+  });
+  $("btnDel").disabled = S.play.frames.length < 2 || S.playing;
+  $("btnAdd").disabled = S.playing;
+  $("btnPrev").disabled = S.cur === 0 || S.playing;
+  $("btnNext").disabled = S.cur === S.play.frames.length - 1 || S.playing;
+  $("note").value = frame().note; $("note").disabled = S.playing;
+  $("cue").textContent = frame().note;
+  $("playName").value = S.play.name;
+}
+function renderLib(){
+  const ul = $("lib"); ul.textContent = "";
+  const names = Object.keys(library).sort((a,b) => a.localeCompare(b));
+  if (!names.length){ const li = document.createElement("li"); li.innerHTML = '<p class="muted">No saved plays yet.</p>'; ul.appendChild(li); return; }
+  names.forEach(n => {
+    const li = document.createElement("li");
+    const b = document.createElement("button"); b.className = "name" + (n === S.play.name ? " on" : ""); b.textContent = n;
+    b.onclick = () => { stop(); S.play = normalize(clone(library[n])); S.cur = 0; draft(); refresh(); toast("Loaded " + n); };
+    const x = document.createElement("button"); x.className = "danger"; x.textContent = "✕"; x.setAttribute("aria-label", "Delete " + n);
+    x.onclick = () => {
+      if (x.dataset.arm){ delete library[n]; store.set("playboard.library", library); renderLib(); toast("Deleted " + n); }
+      else { x.dataset.arm = 1; x.textContent = "Delete?"; setTimeout(() => { if (x.isConnected){ delete x.dataset.arm; x.textContent = "✕"; } }, 3000); }
+    };
+    li.append(b, x); ul.appendChild(li);
+  });
+}
+function refresh(){ drawCourt(); renderFrame(); renderSteps(); renderLib(); }
+
+/* ---------- dragging ---------- */
+function toFt(e){
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const c = (v, a, b) => Math.min(b, Math.max(a, v)), g = geo();
+  return [ Math.round(c(p.x/10 - 25, g.x0 + 1.5, g.x1 - 1.5)*10)/10, Math.round(c(p.y/10, g.y0 + 1.5, g.y1 - 1.5)*10)/10 ];
+}
+svg.addEventListener("pointerdown", e => {
+  if (S.playing) return;
+  const t = e.target.closest("[data-id]"); if (!t) return;
+  const id = t.dataset.id, f = frame();
+  let curve = id !== "BALL" && (S.mode === "curve" || e.shiftKey);
+  if (curve && S.cur === 0){ curve = false; toast("Routes start on step 2. Set the starting spots here, then add a step."); }
+  S.drag = { id, curve };
+  if (curve) f.paths[id] = [f.pos[id].slice()];
+  else if (id !== "BALL") delete f.paths[id];
+  svg.setPointerCapture(e.pointerId); e.preventDefault();
+});
+svg.addEventListener("pointermove", e => {
+  if (!S.drag) return;
+  const p = toFt(e), f = frame(), id = S.drag.id;
+  if (id === "BALL") f.ball = { owner:null, x:p[0], y:p[1] };
+  else {
+    f.pos[id] = p;
+    if (S.drag.curve){
+      const pts = f.paths[id], last = pts[pts.length-1];
+      if (pts.length < 150 && Math.hypot(p[0]-last[0], p[1]-last[1]) >= 0.9) pts.push(p);
+    }
+  }
+  renderFrame();
+});
+function endDrag(){
+  if (!S.drag) return;
+  const f = frame(), id = S.drag.id;
+  if (S.drag.curve){
+    const pts = f.paths[id], last = pts[pts.length-1], p = f.pos[id];
+    if (Math.hypot(p[0]-last[0], p[1]-last[1]) > 0.05) pts.push(p.slice());
+    if (pathLen(pts) < 1.5) delete f.paths[id];
+  }
+  if (id === "BALL"){
+    let best = null, bd = 3.2;
+    IDS.filter(id => S.showDef || id[0] === "O").forEach(id => {
+      const d = Math.hypot(f.pos[id][0] - f.ball.x, f.pos[id][1] - f.ball.y);
+      if (d < bd){ bd = d; best = id; }
+    });
+    if (best) f.ball.owner = best;
+  }
+  S.drag = null; renderFrame(); draft();
+}
+svg.addEventListener("pointerup", endDrag);
+svg.addEventListener("pointercancel", endDrag);
+
+/* ---------- playback ---------- */
+function setPlayingUI(on){
+  S.playing = on; svg.classList.toggle("playing", on);
+  $("btnPlay").textContent = on ? "■ Stop" : "▶ Play";
+  renderSteps();
+}
+function stop(){ cancelAnimationFrame(S.raf); if (S.playing){ setPlayingUI(false); renderFrame(); } }
+function play(){
+  if (S.play.frames.length < 2){ toast("Add a second step first."); return; }
+  if (S.cur >= S.play.frames.length - 1) S.cur = 0;
+  setPlayingUI(true);
+  const pause = 450;
+  const runSeg = () => {
+    const a = S.play.frames[S.cur], b = S.play.frames[S.cur + 1];
+    const dur = 1300 / +$("speed").value;
+    $("cue").textContent = b.note;
+    let t0 = null;
+    const tick = now => {
+      if (!S.playing) return;
+      t0 ??= now;
+      const t = Math.min(1, (now - t0) / dur);
+      render(interpState(a, b, ease(t)), false);
+      if (t < 1) S.raf = requestAnimationFrame(tick);
+      else {
+        S.cur++; renderSteps(); $("cue").textContent = b.note;
+        if (S.cur < S.play.frames.length - 1) setTimeout(() => { if (S.playing) runSeg(); }, pause);
+        else setTimeout(() => { if (S.playing){ setPlayingUI(false); renderFrame(); } }, pause);
+      }
+    };
+    S.raf = requestAnimationFrame(tick);
+  };
+  $("cue").textContent = frame().note;
+  render({ pos: frame().pos, ball: ballPt(frame()) }, false);
+  setTimeout(() => { if (S.playing) runSeg(); }, 350);
+}
+
+/* ---------- controls ---------- */
+$("btnPlay").onclick = () => S.playing ? stop() : play();
+$("btnPrev").onclick = () => { if (S.cur > 0){ S.cur--; refresh(); } };
+$("btnNext").onclick = () => { if (S.cur < S.play.frames.length - 1){ S.cur++; refresh(); } };
+$("btnAdd").onclick = () => {
+  const f = clone(frame()); f.note = ""; f.paths = {};
+  S.play.frames.splice(S.cur + 1, 0, f); S.cur++; draft(); refresh();
+};
+$("btnDel").onclick = () => {
+  if (S.play.frames.length < 2) return;
+  S.play.frames.splice(S.cur, 1); S.cur = Math.max(0, S.cur - 1); draft(); refresh();
+};
+$("note").addEventListener("input", e => { frame().note = e.target.value; $("cue").textContent = e.target.value; draft(); });
+function setCourt(mode){
+  if (S.playing || S.play.court === mode) return;
+  S.play.court = mode;
+  if (mode === "half"){
+    const maxY = geo().y1 - 1.5; let moved = false;
+    S.play.frames.forEach(f => { IDS.forEach(id => { if (f.pos[id][1] > maxY){ f.pos[id][1] = maxY; moved = true; } });
+      if (!f.ball.owner && f.ball.y > maxY){ f.ball.y = maxY; moved = true; } });
+    if (moved) toast("Moved backcourt players up to half court.");
+  }
+  draft(); refresh();
+}
+function setMode(m){
+  S.mode = m;
+  $("mStraight").setAttribute("aria-pressed", String(m === "straight"));
+  $("mCurve").setAttribute("aria-pressed", String(m === "curve"));
+  if (m === "curve" && S.cur === 0 && S.play.frames.length > 1) toast("Pick step 2 or later, then drag a player along their route.");
+}
+$("mStraight").onclick = () => setMode("straight");
+$("mCurve").onclick = () => setMode("curve");
+$("cHalf").onclick = () => setCourt("half");
+$("cFull").onclick = () => setCourt("full");
+$("showDef").addEventListener("change", e => { S.showDef = e.target.checked; renderFrame(); });
+$("playName").addEventListener("input", e => { S.play.name = e.target.value.slice(0, 60); draft(); });
+$("btnSave").onclick = () => {
+  const n = (S.play.name || "").trim();
+  if (!n){ toast("Give the play a name first."); $("playName").focus(); return; }
+  S.play.name = n; library[n] = clone(S.play);
+  toast(store.set("playboard.library", library) ? "Saved " + n : "This browser blocked saving. Copy the play code instead.");
+  renderLib();
+};
+$("btnNew").onclick = () => { stop(); S.play = blankPlay("New play", S.play.court); S.cur = 0; draft(); refresh(); $("playName").select(); };
+$("btnCopy").onclick = () => {
+  const code = JSON.stringify(S.play);
+  const ta = $("code"); ta.value = code;
+  const fallback = () => { ta.focus(); ta.select(); toast("Code selected. Press Ctrl+C / ⌘C to copy."); };
+  try { navigator.clipboard.writeText(code).then(() => toast("Play code copied."), fallback); } catch { fallback(); }
+};
+$("btnLoadCode").onclick = () => {
+  try { stop(); S.play = normalize(JSON.parse($("code").value)); S.cur = 0; draft(); refresh(); toast("Loaded " + S.play.name); }
+  catch { toast("That code didn't read right. Copy the whole thing and try again."); }
+};
+$("btnFull").onclick = () => {
+  const b = $("board");
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  else b.requestFullscreen?.().catch(() => toast("Full screen isn't available here."));
+};
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input,textarea,select")) return;
+  if (e.key === " "){ e.preventDefault(); $("btnPlay").click(); }
+  if (e.key === "ArrowRight" && !S.playing) $("btnNext").click();
+  if (e.key === "ArrowLeft" && !S.playing) $("btnPrev").click();
+});
+
+/* ---------- export: canvas renderer (always the light whiteboard look) ---------- */
+const PAL = { white:"#ffffff", paint:"#e9eef4", line:"#27313d", muted:"#5b6674", grey:"#a7b0ba", soft:"#cdd4dc",
+  off:"#1d4fd6", offL:"#8ea9eb", def:"#c81e2a", defL:"#e48e94", ball:"#e8740c", ballL:"#f3b985", ink:"#16202b", apron:"#dde3ea" };
+const CAP = 72;
+const cv = document.createElement("canvas"); cv.id = "expCanvas"; cv.width = 640; cv.height = 662;
+document.body.appendChild(cv);
+const ctx = cv.getContext("2d");
+// Size the export canvas for the current court; full court is scaled down to keep files small
+function exportDims(){
+  const g = geo(), sc = g.full ? 0.62 : 0.85;
+  const w = Math.round(U(g.x1 - g.x0) * sc), ch = Math.round(U(g.y1 - g.y0) * sc);
+  return { g, sc, w, ch, h: ch + CAP };
+}
+function sizeCanvas(){ const d = exportDims(); if (cv.width !== d.w) cv.width = d.w; if (cv.height !== d.h) cv.height = d.h; return d; }
+
+function halfCanvas(c){
+  const stroke = f => { c.beginPath(); f(); c.stroke(); };
+  c.fillStyle = PAL.paint; c.fillRect(X(-6), 0, 120, 190);
+  c.strokeStyle = PAL.line; c.lineWidth = 2.4;
+  stroke(() => c.rect(X(-6), 0, 120, 190));
+  stroke(() => c.arc(250, 190, 60, 0, Math.PI));
+  c.setLineDash([8, 8]); stroke(() => c.arc(250, 190, 60, Math.PI, 2*Math.PI)); c.setLineDash([]);
+  stroke(() => { c.moveTo(X(-19.75), 0); c.lineTo(X(-19.75), 52.5); c.arc(250, 52.5, 197.5, Math.PI, 0, true); c.lineTo(X(19.75), 0); });
+  [70,80,110,140].forEach(y => stroke(() => { c.moveTo(X(-6)-6, y); c.lineTo(X(-6), y); c.moveTo(X(6), y); c.lineTo(X(6)+6, y); }));
+  c.lineWidth = 4; stroke(() => { c.moveTo(X(-3), 40); c.lineTo(X(3), 40); });
+  c.strokeStyle = PAL.ball; c.lineWidth = 2.4; stroke(() => c.arc(250, 52.5, 7.5, 0, 2*Math.PI));
+}
+
+function drawExport(st, stepIdx, note){
+  const d = exportDims(), g = d.g, c = ctx, len = g.full ? 940 : 470;
+  c.save();
+  c.fillStyle = PAL.white; c.fillRect(0, 0, d.w, d.h);
+  c.scale(d.sc, d.sc); c.translate(-X(g.x0), -U(g.y0));
+  c.fillStyle = PAL.apron; c.fillRect(X(g.x0), U(g.y0), U(g.x1 - g.x0), U(g.y1 - g.y0));
+  c.fillStyle = PAL.white; c.fillRect(0, 0, 500, len);
+  halfCanvas(c);
+  c.strokeStyle = PAL.line; c.lineWidth = 2.4;
+  if (g.full){
+    c.save(); c.translate(0, 940); c.scale(1, -1); halfCanvas(c); c.restore();
+    c.strokeStyle = PAL.line; c.lineWidth = 2.4;
+    c.beginPath(); c.moveTo(0, 470); c.lineTo(500, 470); c.stroke();
+    c.beginPath(); c.arc(250, 470, 60, 0, 2*Math.PI); c.stroke();
+  } else { c.beginPath(); c.arc(250, 470, 60, Math.PI, 2*Math.PI); c.stroke(); }
+  c.strokeStyle = PAL.line; c.lineWidth = 2.4; c.strokeRect(0, 0, 500, len);
+
+  c.textAlign = "center"; c.textBaseline = "middle";
+  const ids = [...DEF, ...OFF].filter(id => S.showDef || id[0] === "O");
+  ids.forEach(id => {
+    const [x, y] = st.pos[id], px = X(x), py = U(y), def = id[0] === "X";
+    c.beginPath(); c.arc(px, py, U(R), 0, 2*Math.PI);
+    if (def){ c.fillStyle = PAL.white; c.fill(); c.strokeStyle = PAL.def; c.lineWidth = 3; c.stroke(); }
+    else { c.fillStyle = PAL.off; c.fill(); }
+    c.fillStyle = def ? PAL.def : PAL.white;
+    c.font = `700 ${def ? 17 : 20}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    c.fillText(def ? "X" + id[1] : id[1], px, py + 1);
+  });
+  c.beginPath(); c.arc(X(st.ball[0]), U(st.ball[1]), U(BR), 0, 2*Math.PI);
+  c.fillStyle = PAL.ball; c.fill(); c.strokeStyle = PAL.line; c.lineWidth = 1.2; c.stroke();
+  c.restore();
+
+  // caption strip: play name, step, coaching cue
+  const W = d.w, CH = d.ch;
+  c.textAlign = "left"; c.textBaseline = "alphabetic";
+  c.fillStyle = PAL.muted; c.font = `600 14px "Archivo", system-ui, sans-serif`;
+  const n = S.play.frames.length;
+  c.fillText(`${(S.play.name || "Play").toUpperCase()}  ·  STEP ${stepIdx + 1} OF ${n}`, 14, CH + 18);
+  c.fillStyle = PAL.ink; c.font = `600 20px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  const words = String(note || "").split(/\s+/).filter(Boolean), lines = [""];
+  words.forEach(w => {
+    const t = lines[lines.length-1] ? lines[lines.length-1] + " " + w : w;
+    if (c.measureText(t).width > W - 28 && lines[lines.length-1]) lines.push(w); else lines[lines.length-1] = t;
+  });
+  if (lines.length > 2){ lines.length = 2; lines[1] += "…"; }
+  lines.forEach((l, i) => c.fillText(l, 14, CH + 42 + i * 22));
+}
+
+// The whole play as a list of still images with how long each one shows
+function timeline(fps){
+  const F = S.play.frames, sp = +$("speed").value, out = [];
+  out.push({ st: stateOf(F[0]), i: 0, note: F[0].note, ms: 1100 });
+  for (let s = 0; s < F.length - 1; s++){
+    const n = Math.max(2, Math.round(1.3 / sp * fps));
+    for (let j = 1; j <= n; j++) out.push({ st: interpState(F[s], F[s+1], ease(j / n)), i: s + 1, note: F[s+1].note, ms: 1000 / fps });
+    out[out.length - 1].ms += s === F.length - 2 ? 1600 : 700;
+  }
+  return out;
+}
+
+/* ---------- GIF encoder (16-color palette, LZW) ---------- */
+const hex = h => [1,3,5].map(i => parseInt(h.slice(i, i+2), 16));
+const GPAL = Object.values(PAL).map(hex);
+while (GPAL.length < 16) GPAL.push([255,255,255]);
+const lut = new Int8Array(32768).fill(-1);
+function nearest(r, g, b){
+  const key = (r >> 3) << 10 | (g >> 3) << 5 | (b >> 3);
+  let v = lut[key]; if (v >= 0) return v;
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < GPAL.length; i++){ const p = GPAL[i], d = (p[0]-r)**2 + (p[1]-g)**2 + (p[2]-b)**2; if (d < bd){ bd = d; best = i; } }
+  lut[key] = best; return best;
+}
+function lzw(ix){
+  const minCode = 4, clear = 16, eoi = 17;
+  let size = 5, next = 18, dict = new Map(), cur = 0, nb = 0;
+  const out = []; const emit = code => { cur |= code << nb; nb += size; while (nb >= 8){ out.push(cur & 255); cur >>>= 8; nb -= 8; } };
+  emit(clear);
+  let pre = ix[0];
+  for (let i = 1; i < ix.length; i++){
+    const k = ix[i], key = pre << 4 | k, hit = dict.get(key);
+    if (hit !== undefined){ pre = hit; continue; }
+    emit(pre);
+    if (next === 4096){ emit(clear); dict = new Map(); next = 18; size = 5; }
+    else { if (next >= (1 << size)) size++; dict.set(key, next++); }
+    pre = k;
+  }
+  emit(pre); emit(eoi);
+  if (nb > 0) out.push(cur & 255);
+  const blocks = [minCode];
+  for (let i = 0; i < out.length; i += 255){ const ch = out.slice(i, i + 255); blocks.push(ch.length, ...ch); }
+  blocks.push(0);
+  return new Uint8Array(blocks);
+}
+const le = n => [n & 255, (n >> 8) & 255];
+async function makeGif(progress){
+  const tl = timeline(15), parts = [], { w: W, h: H } = sizeCanvas();
+  parts.push(new Uint8Array([...[..."GIF89a"].map(ch => ch.charCodeAt(0)), ...le(W), ...le(H), 0xF3, 0, 0, ...GPAL.flat()]));
+  parts.push(new Uint8Array([0x21,0xFF,0x0B, ...[..."NETSCAPE2.0"].map(ch => ch.charCodeAt(0)), 3, 1, 0, 0, 0]));
+  let t = 0;
+  for (let f = 0; f < tl.length; f++){
+    const sh = tl[f];
+    drawExport(sh.st, sh.i, sh.note);
+    const d = ctx.getImageData(0, 0, W, H).data, ix = new Uint8Array(W * H);
+    for (let p = 0, q = 0; q < ix.length; p += 4, q++) ix[q] = nearest(d[p], d[p+1], d[p+2]);
+    const delay = Math.max(2, Math.round((t + sh.ms) / 10) - Math.round(t / 10)); t += sh.ms;
+    parts.push(new Uint8Array([0x21,0xF9,4, 0x04, ...le(delay), 0, 0, 0x2C, 0,0, 0,0, ...le(W), ...le(H), 0]));
+    parts.push(lzw(ix));
+    if (f % 4 === 0){ progress(f / tl.length); await new Promise(r => setTimeout(r, 0)); }
+  }
+  parts.push(new Uint8Array([0x3B]));
+  return new Blob(parts, { type: "image/gif" });
+}
+
+/* ---------- video (records the canvas in real time) ---------- */
+function makeVideo(progress){
+  return new Promise((resolve, reject) => {
+    if (!cv.captureStream || typeof MediaRecorder === "undefined") return reject(new Error("novideo"));
+    const types = [["video/mp4;codecs=avc1","mp4"],["video/mp4","mp4"],["video/webm;codecs=vp9","webm"],["video/webm","webm"]];
+    const pick = types.find(([m]) => MediaRecorder.isTypeSupported?.(m));
+    if (!pick) return reject(new Error("novideo"));
+    sizeCanvas();
+    const tl = timeline(30), total = tl.reduce((s, x) => s + x.ms, 0);
+    const starts = []; tl.reduce((s, x, i) => (starts[i] = s, s + x.ms), 0);
+    drawExport(tl[0].st, tl[0].i, tl[0].note);
+    const rec = new MediaRecorder(cv.captureStream(30), { mimeType: pick[0], videoBitsPerSecond: 2_500_000 });
+    const chunks = [];
+    rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    rec.onstop = () => resolve({ blob: new Blob(chunks, { type: pick[0] }), ext: pick[1] });
+    rec.onerror = () => reject(new Error("rec"));
+    rec.start(250);
+    let t0 = null, last = -1;
+    const tick = now => {
+      t0 ??= now; const el = now - t0;
+      let i = last < 0 ? 0 : last;
+      while (i < tl.length - 1 && starts[i + 1] <= el) i++;
+      if (i !== last){ drawExport(tl[i].st, tl[i].i, tl[i].note); last = i; }
+      progress(Math.min(1, el / total));
+      if (el < total + 150) requestAnimationFrame(tick); else rec.stop();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+/* ---------- saving files (all made on this device, nothing uploaded) ---------- */
+const exp = { busy: false };
+const setBar = v => { $("bar").hidden = v == null; $("barFill").style.width = ((v || 0) * 100).toFixed(1) + "%"; };
+function setBusy(on){ exp.busy = on; $("btnGif").disabled = $("btnVid").disabled = on; }
+const fileName = ext => (S.play.name || "play").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() + "." + ext;
+function download(blob, name){
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+async function offer(blob, name){
+  download(blob, name);
+  $("expMsg").textContent = `Saved ${name} (${(blob.size/1048576).toFixed(1)} MB). Check your downloads.`;
+}
+setBusy(false);
+$("expMsg").textContent = "Exports the whole play at the current speed, with your step cues as captions.";
+
+/* ---------- playbook backup / restore ---------- */
+$("btnBackup").onclick = () => {
+  const names = Object.keys(library);
+  if (!names.length){ toast("Save a play first."); return; }
+  const stamp = new Date().toISOString().slice(0, 10);
+  download(new Blob([JSON.stringify({ app: "playboard", version: 1, plays: library }, null, 1)], { type: "application/json" }), `playboard-backup-${stamp}.json`);
+  toast(`Backed up ${names.length} play${names.length === 1 ? "" : "s"}.`);
+};
+$("btnRestore").onclick = () => $("restoreFile").click();
+$("restoreFile").addEventListener("change", async e => {
+  const file = e.target.files && e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    const plays = data && data.plays && typeof data.plays === "object" ? data.plays : null;
+    if (!plays) throw new Error("bad");
+    let n = 0;
+    Object.values(plays).forEach(p => { try { const q = normalize(p); library[q.name] = q; n++; } catch {} });
+    if (!n) throw new Error("bad");
+    store.set("playboard.library", library); renderLib();
+    toast(`Restored ${n} play${n === 1 ? "" : "s"}.`);
+  } catch { toast("That file isn't a Playboard backup."); }
+});
+
+$("btnGif").onclick = async () => {
+  if (exp.busy || S.play.frames.length < 2){ if (S.play.frames.length < 2) toast("Add a second step first."); return; }
+  stop(); setBusy(true); $("expMsg").textContent = "Building GIF…";
+  try { await document.fonts.ready; const blob = await makeGif(setBar); setBar(1); await offer(blob, fileName("gif")); }
+  catch { $("expMsg").textContent = "Something went wrong building the GIF."; }
+  setBar(null); setBusy(false);
+};
+$("btnVid").onclick = async () => {
+  if (exp.busy || S.play.frames.length < 2){ if (S.play.frames.length < 2) toast("Add a second step first."); return; }
+  stop(); setBusy(true); $("expMsg").textContent = "Recording video in real time. Keep this tab open…";
+  try { await document.fonts.ready; const { blob, ext } = await makeVideo(setBar); await offer(blob, fileName(ext)); }
+  catch (e){ $("expMsg").textContent = e?.message === "novideo" ? "This browser can't record video. Use Save GIF instead." : "Something went wrong recording the video."; }
+  setBar(null); setBusy(false);
+};
+
+refresh();
+})();
+</script>
+</body>
+</html>
